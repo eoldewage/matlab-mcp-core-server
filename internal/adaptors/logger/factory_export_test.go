@@ -5,5 +5,6 @@ package logger
 const (
 	LogFileName         = logFileName
 	WatchdogLogFileName = watchdogLogFileName
-	LogFileExt          = logFileExt
+	//ChatHistoryFileName = chatHistoryFileName
+	LogFileExt = logFileExt
 )

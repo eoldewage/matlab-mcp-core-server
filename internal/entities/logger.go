@@ -5,6 +5,7 @@ package entities
 type LogLevel string
 
 const (
+	LogLevelChat  LogLevel = "chat"
 	LogLevelDebug LogLevel = "debug"
 	LogLevelInfo  LogLevel = "info"
 	LogLevelWarn  LogLevel = "warn"

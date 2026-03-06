@@ -158,3 +158,9 @@ func (_c *MockLoggerFactory_NewMCPSessionLogger_Call) RunAndReturn(run func(sess
 	_c.Call.Return(run)
 	return _c
 }
+
+// TODO:
+/*func (f *MockLoggerFactory) GetChatLogger() (*log.Logger, messages.Error) {
+	return nil, nil
+
+}*/

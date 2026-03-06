@@ -8,7 +8,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -39,6 +42,8 @@ type Client struct {
 
 	pingRetry   time.Duration
 	pingTimeout time.Duration
+
+	chatLogger *log.Logger
 }
 
 func NewClient(
@@ -50,6 +55,22 @@ func NewClient(
 		return nil, err
 	}
 
+	//TODO: Pass this in somehow
+	logDir := "logs"
+	logFilePath := filepath.Join(logDir, "chatHistory.txt")
+	err = os.MkdirAll("logs", 0o755)
+	if err != nil {
+		return nil, err
+	}
+
+	chatHistoryFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return nil, err
+	}
+	defer chatHistoryFile.Close()
+
+	chatLogger := log.New(chatHistoryFile, "chat ", log.Ldate|log.Ltime)
+
 	return &Client{
 		host:       endpoint.Host,
 		port:       endpoint.Port,
@@ -58,6 +79,7 @@ func NewClient(
 
 		pingRetry:   defaultPingRetry,
 		pingTimeout: defaultPingTimeout,
+		chatLogger:  chatLogger,
 	}, nil
 }
 
@@ -79,17 +101,20 @@ func (c *Client) Eval(ctx context.Context, logger entities.Logger, input entitie
 			},
 		},
 	}
-
+	c.chatLogger.Println("req:\t" + input.Code)
 	response, err := c.sendRequestToEvaluationEndpoint(ctx, logger, payload)
 	if err != nil {
+		c.chatLogger.Println("out:\t" + err.Error())
 		return entities.EvalResponse{}, err
 	}
 
 	if len(response.Messages.EvalResponse) == 0 {
 		logger.Error("No EvalResponse messages received")
+		c.chatLogger.Println("out:\t" + "No EvalResponse messages received")
 		return entities.EvalResponse{}, fmt.Errorf("no response messages received")
 	}
 
+	c.chatLogger.Println("out:\t" + response.Messages.EvalResponse[0].ResponseStr)
 	if response.Messages.EvalResponse[0].IsError {
 		return entities.EvalResponse{}, newMATLABError(response.Messages.EvalResponse[0].ResponseStr)
 	}
@@ -106,17 +131,20 @@ func (c *Client) EvalWithCapture(ctx context.Context, logger entities.Logger, in
 		Arguments:  []string{input.Code},
 		NumOutputs: 1,
 	}
-
+	c.chatLogger.Println("req:\t" + input.Code)
 	response, err := c.FEval(ctx, logger, fevalRequest)
 	if err != nil {
+		c.chatLogger.Println("out:\t" + err.Error())
 		return entities.EvalResponse{}, err
 	}
 
 	outputs, err := parseEvalWithCaptureResponse(response)
 	if err != nil {
+		c.chatLogger.Println("out:\t" + err.Error())
 		return entities.EvalResponse{}, err
 	}
-
+	// TODO:
+	//c.chatLogger.Println("out:" + outputs)
 	return outputs, nil
 }
 
@@ -132,19 +160,23 @@ func (c *Client) FEval(ctx context.Context, logger entities.Logger, input entiti
 			},
 		},
 	}
+	c.chatLogger.Println("req:\t" + strings.Join(input.Arguments, ""))
 
 	response, err := c.sendRequestToEvaluationEndpoint(ctx, logger, payload)
 	if err != nil {
+		c.chatLogger.Println("out:\t" + err.Error())
 		return entities.FEvalResponse{}, err
 	}
 
 	if len(response.Messages.FevalResponse) == 0 {
 		logger.Error("No FEvalResponse messages received")
+		c.chatLogger.Println("out:\t" + "No FEvalResponse messages received")
 		return entities.FEvalResponse{}, fmt.Errorf("no response messages received")
 	}
 
 	if response.Messages.FevalResponse[0].IsError {
 		if len(response.Messages.FevalResponse[0].MessageFaults) == 0 {
+			c.chatLogger.Println("out:\t" + "Response was in error state but no fault messages received")
 			logger.Error("Response was in error state but no fault messages received")
 			return entities.FEvalResponse{}, fmt.Errorf("response was in error state but no fault messages received")
 		}
@@ -157,8 +189,11 @@ func (c *Client) FEval(ctx context.Context, logger entities.Logger, input entiti
 			}
 			errorMessage += f.Message + "\n\n"
 		}
+		c.chatLogger.Println("out:\t" + errorMessage)
 		return entities.FEvalResponse{}, newMATLABError(errorMessage)
 	}
+	// TODO:
+	//c.chatLogger.Println("out:" + response.Messages.FevalResponse[0].Results)
 
 	return entities.FEvalResponse{
 		Outputs: response.Messages.FevalResponse[0].Results,

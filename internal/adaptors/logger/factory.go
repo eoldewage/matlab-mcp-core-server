@@ -22,7 +22,8 @@ const defaultGlobalLogLevel slog.Level = slog.LevelDebug
 const (
 	logFileName         = "server"
 	watchdogLogFileName = "watchdog"
-	logFileExt          = ".log"
+	//chatHistoryFileName = "chat"
+	logFileExt = ".log"
 )
 
 type ConfigFactory interface {
@@ -47,13 +48,15 @@ type Factory struct {
 	filenameFactory  FilenameFactory
 	osLayer          OSLayer
 
-	initOnce       sync.Once
-	initError      messages.Error
-	parsedLogLevel slog.Level
-	logFile        entities.Writer
+	initOnce        sync.Once
+	initError       messages.Error
+	parsedLogLevel  slog.Level
+	logFile         entities.Writer
+	chatHistoryFile entities.Writer
 
 	globalLoggerOnce sync.Once
 	globalLogger     *slogLogger
+	//chatLogger       *log.Logger
 }
 
 func NewFactory(
@@ -111,12 +114,18 @@ func (f *Factory) GetGlobalLogger() (entities.Logger, messages.Error) {
 			Level: f.parsedLogLevel,
 		})
 		f.globalLogger = &slogLogger{
-			logger: slog.New(handler),
+			logger: slog.New(handler), //LogLevelChat
 		}
 	})
 
 	return f.globalLogger, nil
 }
+
+/*func (f *Factory) GetChatLogger() (*log.Logger, messages.Error) {
+	f.chatLogger = log.New(f.chatHistoryFile, "chat ", log.Ldate|log.Ltime)
+	return f.chatLogger, nil
+
+}*/
 
 func (f *Factory) initialize() messages.Error {
 	f.initOnce.Do(func() {
@@ -158,7 +167,6 @@ func (f *Factory) initialize() messages.Error {
 		}
 
 		logFilePath := f.filenameFactory.FilenameWithSuffix(logFileBase, logFileExt, id)
-
 		logFile, err := f.osLayer.Create(logFilePath)
 		if err != nil {
 			f.initError = messages.New_StartupErrors_FailedToCreateLogFile_Error(logFilePath)
@@ -166,6 +174,17 @@ func (f *Factory) initialize() messages.Error {
 		}
 
 		f.logFile = logFile
+
+		/*chatHistoryFileBase := filepath.Join(baseDir, chatHistoryFileName)
+
+		chatHistoryFilePath := f.filenameFactory.FilenameWithSuffix(chatHistoryFileBase, logFileExt, id)
+		chatHistoryFile, err := f.osLayer.Create(chatHistoryFilePath)
+		if err != nil {
+			f.initError = messages.New_StartupErrors_FailedToCreateLogFile_Error(chatHistoryFilePath)
+			return
+		}
+		f.chatHistoryFile = chatHistoryFile*/
+
 	})
 
 	return f.initError
