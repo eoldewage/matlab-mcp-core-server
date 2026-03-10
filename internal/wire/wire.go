@@ -16,13 +16,13 @@ import (
 	"github.com/matlab/matlab-mcp-core-server/internal/adaptors/application/parameter/parser"
 	"github.com/matlab/matlab-mcp-core-server/internal/adaptors/buildinfo"
 	files "github.com/matlab/matlab-mcp-core-server/internal/adaptors/filesystem/files"
-	"github.com/matlab/matlab-mcp-core-server/internal/adaptors/matlab/codeanalyzer"
 	"github.com/matlab/matlab-mcp-core-server/internal/adaptors/globalmatlab"
 	"github.com/matlab/matlab-mcp-core-server/internal/adaptors/globalmatlab/matlabrootselector"
 	"github.com/matlab/matlab-mcp-core-server/internal/adaptors/globalmatlab/matlabstartingdirselector"
 	httpclient "github.com/matlab/matlab-mcp-core-server/internal/adaptors/http/client"
 	httpserver "github.com/matlab/matlab-mcp-core-server/internal/adaptors/http/server"
 	"github.com/matlab/matlab-mcp-core-server/internal/adaptors/logger"
+	"github.com/matlab/matlab-mcp-core-server/internal/adaptors/matlab/codeanalyzer"
 	"github.com/matlab/matlab-mcp-core-server/internal/adaptors/matlabmanager"
 	"github.com/matlab/matlab-mcp-core-server/internal/adaptors/matlabmanager/matlabservices"
 	"github.com/matlab/matlab-mcp-core-server/internal/adaptors/matlabmanager/matlabservices/services/localmatlabsession"
@@ -320,6 +320,7 @@ func Initialize(serverDefinition ApplicationDefinition) *Application {
 		// MATLAB Session Client Factory
 		matlabsessionclient.NewFactory,
 		wire.Bind(new(matlabsessionclient.HttpClientFactory), new(*httpclient.Factory)),
+		wire.Bind(new(matlabsessionclient.LoggerFactory), new(*logger.Factory)),
 
 		// Shared Dependencies
 

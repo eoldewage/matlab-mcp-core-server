@@ -18,8 +18,11 @@ func TestNew_HappyPath(t *testing.T) {
 	mockHTTPClientFactory := &mocks.MockHttpClientFactory{}
 	defer mockHTTPClientFactory.AssertExpectations(t)
 
+	mockChatLoggerFactory := &mocks.MockLoggerFactory{}
+	defer mockChatLoggerFactory.AssertExpectations(t)
+
 	// Act
-	factory := matlabsessionclient.NewFactory(mockHTTPClientFactory)
+	factory := matlabsessionclient.NewFactory(mockHTTPClientFactory, mockChatLoggerFactory)
 
 	// Assert
 	assert.NotNil(t, factory)
@@ -30,6 +33,9 @@ func TestFactory_New_HappyPath(t *testing.T) {
 	mockHTTPClientFactory := &mocks.MockHttpClientFactory{}
 	defer mockHTTPClientFactory.AssertExpectations(t)
 
+	mockChatLoggerFactory := &mocks.MockLoggerFactory{}
+	defer mockChatLoggerFactory.AssertExpectations(t)
+
 	mockHTTPClient := &httpclientmocks.MockHttpClient{}
 	defer mockHTTPClient.AssertExpectations(t)
 
@@ -39,7 +45,7 @@ func TestFactory_New_HappyPath(t *testing.T) {
 		Return(mockHTTPClient, nil).
 		Once()
 
-	factory := matlabsessionclient.NewFactory(mockHTTPClientFactory)
+	factory := matlabsessionclient.NewFactory(mockHTTPClientFactory, mockChatLoggerFactory)
 
 	connectionDetails := embeddedconnector.ConnectionDetails{
 		Host:           "localhost",
@@ -61,6 +67,9 @@ func TestFactory_New_HttpClientCreationErrors(t *testing.T) {
 	mockHTTPClientFactory := &mocks.MockHttpClientFactory{}
 	defer mockHTTPClientFactory.AssertExpectations(t)
 
+	mockChatLoggerFactory := &mocks.MockLoggerFactory{}
+	defer mockChatLoggerFactory.AssertExpectations(t)
+
 	expectedCertificatePEM := []byte("some cert")
 	expectedError := assert.AnError
 
@@ -69,7 +78,7 @@ func TestFactory_New_HttpClientCreationErrors(t *testing.T) {
 		Return(nil, expectedError).
 		Once()
 
-	factory := matlabsessionclient.NewFactory(mockHTTPClientFactory)
+	factory := matlabsessionclient.NewFactory(mockHTTPClientFactory, mockChatLoggerFactory)
 
 	connectionDetails := embeddedconnector.ConnectionDetails{
 		Host:           "localhost",

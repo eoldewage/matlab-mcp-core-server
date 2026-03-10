@@ -113,7 +113,7 @@ func Initialize(serverDefinition ApplicationDefinition) *Application {
 	starter := localmatlabsession.NewStarter(factory3, processDetails, matlabProcessLauncher, watchdog3)
 	matlabServices := matlabservices.New(matlabLocator, starter)
 	store := matlabsessionstore.New(loggerFactory, lifecycleSignaler)
-	matlabsessionclientFactory := matlabsessionclient.NewFactory(clientFactory)
+	matlabsessionclientFactory := matlabsessionclient.NewFactory(clientFactory, loggerFactory)
 	matlabManager := matlabmanager.New(matlabServices, store, matlabsessionclientFactory)
 	usecase := listavailablematlabs.New(matlabManager)
 	tool := listavailablematlabs2.New(loggerFactory, usecase)

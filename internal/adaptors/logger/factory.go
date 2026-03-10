@@ -4,6 +4,7 @@ package logger
 
 import (
 	"io"
+	"log"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -22,8 +23,8 @@ const defaultGlobalLogLevel slog.Level = slog.LevelDebug
 const (
 	logFileName         = "server"
 	watchdogLogFileName = "watchdog"
-	//chatHistoryFileName = "chat"
-	logFileExt = ".log"
+	chatHistoryFileName = "chat"
+	logFileExt          = ".log"
 )
 
 type ConfigFactory interface {
@@ -56,7 +57,7 @@ type Factory struct {
 
 	globalLoggerOnce sync.Once
 	globalLogger     *slogLogger
-	//chatLogger       *log.Logger
+	chatLogger       *log.Logger
 }
 
 func NewFactory(
@@ -114,18 +115,18 @@ func (f *Factory) GetGlobalLogger() (entities.Logger, messages.Error) {
 			Level: f.parsedLogLevel,
 		})
 		f.globalLogger = &slogLogger{
-			logger: slog.New(handler), //LogLevelChat
+			logger: slog.New(handler),
 		}
 	})
 
 	return f.globalLogger, nil
 }
 
-/*func (f *Factory) GetChatLogger() (*log.Logger, messages.Error) {
+func (f *Factory) GetChatLogger() (*log.Logger, messages.Error) {
 	f.chatLogger = log.New(f.chatHistoryFile, "chat ", log.Ldate|log.Ltime)
 	return f.chatLogger, nil
 
-}*/
+}
 
 func (f *Factory) initialize() messages.Error {
 	f.initOnce.Do(func() {
@@ -175,7 +176,7 @@ func (f *Factory) initialize() messages.Error {
 
 		f.logFile = logFile
 
-		/*chatHistoryFileBase := filepath.Join(baseDir, chatHistoryFileName)
+		chatHistoryFileBase := filepath.Join(baseDir, chatHistoryFileName)
 
 		chatHistoryFilePath := f.filenameFactory.FilenameWithSuffix(chatHistoryFileBase, logFileExt, id)
 		chatHistoryFile, err := f.osLayer.Create(chatHistoryFilePath)
@@ -183,7 +184,7 @@ func (f *Factory) initialize() messages.Error {
 			f.initError = messages.New_StartupErrors_FailedToCreateLogFile_Error(chatHistoryFilePath)
 			return
 		}
-		f.chatHistoryFile = chatHistoryFile*/
+		f.chatHistoryFile = chatHistoryFile
 
 	})
 

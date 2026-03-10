@@ -11,13 +11,14 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	httpclient "github.com/matlab/matlab-mcp-core-server/internal/adaptors/http/client"
 	"github.com/matlab/matlab-mcp-core-server/internal/adaptors/time/retry"
 	"github.com/matlab/matlab-mcp-core-server/internal/entities"
+	"github.com/matlab/matlab-mcp-core-server/internal/messages"
 )
 
 const defaultPingRetry = 100 * time.Millisecond
@@ -25,6 +26,10 @@ const defaultPingTimeout = 1 * time.Second
 
 type HttpClientFactory interface {
 	NewClientForSelfSignedTLSServer(certificatePEM []byte) (httpclient.HttpClient, error)
+}
+
+type LoggerFactory interface {
+	GetChatLogger() (*log.Logger, messages.Error)
 }
 
 type ConnectionDetails struct {
@@ -43,33 +48,24 @@ type Client struct {
 	pingRetry   time.Duration
 	pingTimeout time.Duration
 
-	chatLogger *log.Logger
+	chatHistoryFile *os.File
+	chatLogger      *log.Logger
 }
 
 func NewClient(
 	endpoint ConnectionDetails,
 	httpClientFactory HttpClientFactory,
+	loggerFactory LoggerFactory,
 ) (*Client, error) {
 	httpClient, err := httpClientFactory.NewClientForSelfSignedTLSServer(endpoint.CertificatePEM)
 	if err != nil {
 		return nil, err
 	}
 
-	//TODO: Pass this in somehow
-	logDir := "logs"
-	logFilePath := filepath.Join(logDir, "chatHistory.txt")
-	err = os.MkdirAll("logs", 0o755)
+	chatLogger, err := loggerFactory.GetChatLogger()
 	if err != nil {
 		return nil, err
 	}
-
-	chatHistoryFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		return nil, err
-	}
-	defer chatHistoryFile.Close()
-
-	chatLogger := log.New(chatHistoryFile, "chat ", log.Ldate|log.Ltime)
 
 	return &Client{
 		host:       endpoint.Host,
@@ -101,24 +97,25 @@ func (c *Client) Eval(ctx context.Context, logger entities.Logger, input entitie
 			},
 		},
 	}
-	c.chatLogger.Println("req:\t" + input.Code)
+	c.chatLogger.Println("eval:\n" + input.Code)
 	response, err := c.sendRequestToEvaluationEndpoint(ctx, logger, payload)
 	if err != nil {
-		c.chatLogger.Println("out:\t" + err.Error())
+		c.chatLogger.Println("err:\n" + err.Error())
 		return entities.EvalResponse{}, err
 	}
 
 	if len(response.Messages.EvalResponse) == 0 {
 		logger.Error("No EvalResponse messages received")
-		c.chatLogger.Println("out:\t" + "No EvalResponse messages received")
+		c.chatLogger.Println("err:\n" + "No EvalResponse messages received")
 		return entities.EvalResponse{}, fmt.Errorf("no response messages received")
 	}
 
-	c.chatLogger.Println("out:\t" + response.Messages.EvalResponse[0].ResponseStr)
 	if response.Messages.EvalResponse[0].IsError {
+		c.chatLogger.Println("err_out:\n" + response.Messages.EvalResponse[0].ResponseStr)
 		return entities.EvalResponse{}, newMATLABError(response.Messages.EvalResponse[0].ResponseStr)
 	}
 
+	c.chatLogger.Println("out:\n" + response.Messages.EvalResponse[0].ResponseStr)
 	return entities.EvalResponse{
 		ConsoleOutput: response.Messages.EvalResponse[0].ResponseStr,
 		Images:        nil,
@@ -131,20 +128,20 @@ func (c *Client) EvalWithCapture(ctx context.Context, logger entities.Logger, in
 		Arguments:  []string{input.Code},
 		NumOutputs: 1,
 	}
-	c.chatLogger.Println("req:\t" + input.Code)
+	c.chatLogger.Println("eval_cap:\n" + input.Code)
 	response, err := c.FEval(ctx, logger, fevalRequest)
 	if err != nil {
-		c.chatLogger.Println("out:\t" + err.Error())
+		c.chatLogger.Println("err:\n" + err.Error())
 		return entities.EvalResponse{}, err
 	}
 
 	outputs, err := parseEvalWithCaptureResponse(response)
 	if err != nil {
-		c.chatLogger.Println("out:\t" + err.Error())
+		c.chatLogger.Println("err:\n" + err.Error())
 		return entities.EvalResponse{}, err
 	}
-	// TODO:
-	//c.chatLogger.Println("out:" + outputs)
+
+	c.chatLogger.Println("out:\n" + outputs.ConsoleOutput)
 	return outputs, nil
 }
 
@@ -160,23 +157,27 @@ func (c *Client) FEval(ctx context.Context, logger entities.Logger, input entiti
 			},
 		},
 	}
-	c.chatLogger.Println("req:\t" + strings.Join(input.Arguments, ""))
+	if input.Function != "matlab_mcp.mcpEval" {
+		c.chatLogger.Println("feval:\t" + strings.Join(input.Arguments, "") + "\n" +
+			"Evaluating " + input.Function + " with arguments " + strings.Join(input.Arguments, "") + "\n" +
+			"Expecting " + strconv.Itoa(input.NumOutputs) + " outputs")
+	}
 
 	response, err := c.sendRequestToEvaluationEndpoint(ctx, logger, payload)
 	if err != nil {
-		c.chatLogger.Println("out:\t" + err.Error())
+		c.chatLogger.Println("err:\n" + err.Error())
 		return entities.FEvalResponse{}, err
 	}
 
 	if len(response.Messages.FevalResponse) == 0 {
 		logger.Error("No FEvalResponse messages received")
-		c.chatLogger.Println("out:\t" + "No FEvalResponse messages received")
+		c.chatLogger.Println("err:\n" + "No FEvalResponse messages received")
 		return entities.FEvalResponse{}, fmt.Errorf("no response messages received")
 	}
 
 	if response.Messages.FevalResponse[0].IsError {
 		if len(response.Messages.FevalResponse[0].MessageFaults) == 0 {
-			c.chatLogger.Println("out:\t" + "Response was in error state but no fault messages received")
+			c.chatLogger.Println("err_out:\n" + "Response was in error state but no fault messages received")
 			logger.Error("Response was in error state but no fault messages received")
 			return entities.FEvalResponse{}, fmt.Errorf("response was in error state but no fault messages received")
 		}
@@ -189,14 +190,26 @@ func (c *Client) FEval(ctx context.Context, logger entities.Logger, input entiti
 			}
 			errorMessage += f.Message + "\n\n"
 		}
-		c.chatLogger.Println("out:\t" + errorMessage)
+		c.chatLogger.Println("err_out:\n" + errorMessage)
 		return entities.FEvalResponse{}, newMATLABError(errorMessage)
 	}
-	// TODO:
-	//c.chatLogger.Println("out:" + response.Messages.FevalResponse[0].Results)
+
+	result := response.Messages.FevalResponse[0].Results
+	if input.Function != "matlab_mcp.mcpEval" {
+		resultStr := "None"
+		if len(result) != 0 {
+			output0, ok := result[0].(bool)
+			if !ok {
+				resultStr = "Non-bool"
+			} else {
+				resultStr = strconv.FormatBool(output0)
+			}
+		}
+		c.chatLogger.Println("out: " + resultStr)
+	}
 
 	return entities.FEvalResponse{
-		Outputs: response.Messages.FevalResponse[0].Results,
+		Outputs: result,
 	}, nil
 }
 
